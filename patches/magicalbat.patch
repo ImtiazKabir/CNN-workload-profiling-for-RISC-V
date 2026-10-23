@@ -1,0 +1,100 @@
+diff '--color=never' -ruN orig/magicalbat/main.c new/magicalbat/main.c
+--- orig/magicalbat/main.c	2026-10-20 20:05:14.627063598 +0600
++++ new/magicalbat/main.c	2026-10-20 20:06:10.506338102 +0600
+@@ -1,6 +1,8 @@
+ 
+ #define _CRT_SECURE_NO_WARNINGS
+ 
++#include <stdlib.h>
++
+ #include "base.h"
+ #include "arena.h"
+ #include "prng.h"
+@@ -16,6 +18,9 @@
+ 
+ matrix* mat_create(mem_arena* arena, u32 rows, u32 cols);
+ matrix* mat_load(mem_arena* arena, u32 rows, u32 cols, const char* filename);
++matrix* mat_load_rows(
++    mem_arena* arena, u32 row_offset, u32 rows, u32 cols, const char* filename
++);
+ b32 mat_copy(matrix* dst, matrix* src);
+ void mat_clear(matrix* mat);
+ void mat_fill(matrix* mat, f32 x);
+@@ -159,24 +164,35 @@
+ void draw_mnist_digit(f32* data);
+ void create_mnist_model(mem_arena* arena, model_context* model);
+ 
+-int main(void) {
++// usage: mlp [n_train n_test epochs batch_size seed offset]
++int main(int argc, char** argv) {
++    u32 n_train = argc > 1 ? (u32)atoi(argv[1]) : 60000;
++    u32 n_test = argc > 2 ? (u32)atoi(argv[2]) : 10000;
++    u32 epochs = argc > 3 ? (u32)atoi(argv[3]) : 10;
++    u32 batch_size = argc > 4 ? (u32)atoi(argv[4]) : 50;
++    if (argc > 5) { prng_seed((u64)atoll(argv[5]), 0x9e3779b97f4a7c15ULL); }
++    u32 offset = argc > 6 ? (u32)atoi(argv[6]) : 0;
++    u32 test_offset = offset % 10000;
++    n_train = MIN(n_train, 60000 - offset);
++    n_test = MIN(n_test, 10000 - test_offset);
++
+     mem_arena* perm_arena = arena_create(GiB(1), MiB(1));
+ 
+-    matrix* train_images = mat_load(perm_arena, 60000, 784, "train_images.mat");
+-    matrix* test_images = mat_load(perm_arena, 10000, 784, "test_images.mat");
+-    matrix* train_labels = mat_create(perm_arena, 60000, 10);
+-    matrix* test_labels = mat_create(perm_arena, 10000, 10);
++    matrix* train_images = mat_load_rows(perm_arena, offset, n_train, 784, "train_images.mat");
++    matrix* test_images = mat_load_rows(perm_arena, test_offset, n_test, 784, "test_images.mat");
++    matrix* train_labels = mat_create(perm_arena, n_train, 10);
++    matrix* test_labels = mat_create(perm_arena, n_test, 10);
+ 
+     {
+-        matrix* train_labels_file = mat_load(perm_arena, 60000, 1, "train_labels.mat");
+-        matrix* test_labels_file = mat_load(perm_arena, 10000, 1, "test_labels.mat");
++        matrix* train_labels_file = mat_load_rows(perm_arena, offset, n_train, 1, "train_labels.mat");
++        matrix* test_labels_file = mat_load_rows(perm_arena, test_offset, n_test, 1, "test_labels.mat");
+ 
+-        for (u32 i = 0; i < 60000; i++) {
++        for (u32 i = 0; i < n_train; i++) {
+             u32 num = train_labels_file->data[i];
+             train_labels->data[i * 10 + num] = 1.0f;
+         }
+ 
+-        for (u32 i = 0; i < 10000; i++) {
++        for (u32 i = 0; i < n_test; i++) {
+             u32 num = test_labels_file->data[i];
+             test_labels->data[i * 10 + num] = 1.0f;
+         }
+@@ -207,8 +223,8 @@
+         .test_images = test_images,
+         .test_labels = test_labels,
+ 
+-        .epochs = 10,
+-        .batch_size = 50,
++        .epochs = epochs,
++        .batch_size = batch_size,
+         .learning_rate = 0.01f
+     };
+     model_train(model, &training_desc);
+@@ -300,6 +316,21 @@
+ 
+     fclose(f);
+ 
++    return mat;
++}
++
++matrix* mat_load_rows(
++    mem_arena* arena, u32 row_offset, u32 rows, u32 cols, const char* filename
++) {
++    matrix* mat = mat_create(arena, rows, cols);
++
++    FILE* f = fopen(filename, "rb");
++
++    fseek(f, sizeof(f32) * (u64)row_offset * cols, SEEK_SET);
++    fread(mat->data, sizeof(f32), (u64)rows * cols, f);
++
++    fclose(f);
++
+     return mat;
+ }
+ 

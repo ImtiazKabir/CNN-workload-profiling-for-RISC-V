@@ -1,0 +1,121 @@
+diff '--color=never' -ruN orig/AxelMontlahuc/lib/import.c new/AxelMontlahuc/lib/import.c
+--- orig/AxelMontlahuc/lib/import.c	2026-10-20 20:05:14.591065283 +0600
++++ new/AxelMontlahuc/lib/import.c	2026-10-20 20:05:24.010548593 +0600
+@@ -117,4 +117,42 @@
+ 
+     fclose(f);
+     return labels;
+-}
+\ No newline at end of file
++}
++
++double*** readImagesRange(char* filename, int offset, int count) {
++    FILE* f = fopen(filename, "rb");
++    assert(f != NULL);
++
++    uint32_t header[4];
++    (void) !fread(header, sizeof(uint32_t), 4, f);
++    int height = (int)swapEndian(header[2]);
++    int width = (int)swapEndian(header[3]);
++
++    fseek(f, 16 + (long)offset * width * height, SEEK_SET);
++    double*** images = malloc(count * sizeof(double**));
++    assert(images != NULL);
++    for (int i=0; i<count; i++) {
++        images[i] = readImage(f, width, height);
++    }
++
++    fclose(f);
++    return images;
++}
++
++int* readLabelsRange(char* filename, int offset, int count) {
++    FILE* f = fopen(filename, "rb");
++    assert(f != NULL);
++
++    int* labels = malloc(count * sizeof(int));
++    assert(labels != NULL);
++    unsigned char buffer[count];
++    fseek(f, 8 + offset, SEEK_SET);
++    (void) !fread(buffer, sizeof(unsigned char), count, f);
++
++    for (int i=0; i<count; i++) {
++        labels[i] = (int)buffer[i];
++    }
++
++    fclose(f);
++    return labels;
++}
+diff '--color=never' -ruN orig/AxelMontlahuc/lib/import.h new/AxelMontlahuc/lib/import.h
+--- orig/AxelMontlahuc/lib/import.h	2026-10-20 20:05:14.591065283 +0600
++++ new/AxelMontlahuc/lib/import.h	2026-10-20 20:05:24.010548593 +0600
+@@ -10,4 +10,8 @@
+ double*** readImages(char* filename);
+ int* readLabels(char* filename);
+ 
++/* profiling knobs: read `count` items starting at item `offset` */
++double*** readImagesRange(char* filename, int offset, int count);
++int* readLabelsRange(char* filename, int offset, int count);
++
+ #endif
+\ No newline at end of file
+diff '--color=never' -ruN orig/AxelMontlahuc/main.c new/AxelMontlahuc/main.c
+--- orig/AxelMontlahuc/main.c	2026-10-20 20:05:14.591065283 +0600
++++ new/AxelMontlahuc/main.c	2026-10-20 20:05:37.889545715 +0600
+@@ -28,12 +28,17 @@
+     return probs;
+ }
+ 
++/* profiling knobs, set from argv in main(); count 0 = whole dataset */
++static int nTrain = 0, nTest = 0, dataOffset = 0;
++
+ void train(ConvLayer* convLayer, DenseLayer* denseLayer, int epoch, double learningRate) {
+     char* imagesPath = "./MNIST/train-images.idx3-ubyte";
+     char* labelsPath = "./MNIST/train-labels.idx1-ubyte";
+     int* parameters = readParameters(imagesPath);
+-    double*** testImages = readImages(imagesPath);
+-    int* testLabels = readLabels(labelsPath);
++    if (nTrain > 0) parameters[0] = nTrain;
++    else parameters[0] -= dataOffset;
++    double*** testImages = readImagesRange(imagesPath, dataOffset, parameters[0]);
++    int* testLabels = readLabelsRange(labelsPath, dataOffset, parameters[0]);
+ 
+     printf("Number of images: %d\n", parameters[0]);
+     printf("Heigt: %d\n", parameters[1]);
+@@ -66,8 +71,11 @@
+     char* imagesPath = "./MNIST/t10k-images.idx3-ubyte";
+     char* labelsPath = "./MNIST/t10k-labels.idx1-ubyte";
+     int* parameters = readParameters(imagesPath);
+-    double*** testImages = readImages(imagesPath);
+-    int* testLabels = readLabels(labelsPath);
++    int testOffset = dataOffset % parameters[0];
++    if (nTest > 0) parameters[0] = nTest;
++    else parameters[0] -= testOffset;
++    double*** testImages = readImagesRange(imagesPath, testOffset, parameters[0]);
++    int* testLabels = readLabelsRange(labelsPath, testOffset, parameters[0]);
+ 
+     printf("Testing CNN on %d images...\n", parameters[0]);
+     
+@@ -88,14 +96,19 @@
+     printf("Testing completed.\n");
+ }
+ 
+-int main() {
+-    srand(time(NULL));
++/* usage: cnn [n_train n_test epochs seed offset] */
++int main(int argc, char** argv) {
++    int epochs = argc > 3 ? atoi(argv[3]) : 1;
++    if (argc > 1) nTrain = atoi(argv[1]);
++    if (argc > 2) nTest = atoi(argv[2]);
++    if (argc > 5) dataOffset = atoi(argv[5]);
++    srand(argc > 4 ? (unsigned)atoi(argv[4]) : (unsigned)time(NULL));
+ 
+     ConvLayer* convLayer = initConvLayer(8, 3);
+     DenseLayer* denseLayer = initDenseLayer(10, 13, 13, 8);
+     printf("CNN Initialized. \n");
+ 
+-    train(convLayer, denseLayer, 1, 0.005);
++    train(convLayer, denseLayer, epochs, 0.005);
+     test(convLayer, denseLayer);
+ 
+     freeConvLayer(convLayer);

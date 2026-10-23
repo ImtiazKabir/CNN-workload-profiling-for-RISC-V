@@ -1,0 +1,3 @@
+[submodule "CNN/AxelMontlahuc"]
+	path = CNN/AxelMontlahuc
+	url = https://github.com/AxelMontlahuc/CNN.git
