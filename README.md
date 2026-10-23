@@ -164,3 +164,9 @@ This project profiles code written by others:
 - **MNIST**: the handwritten-digit dataset by Yann LeCun, Corinna Cortes and Christopher J. C. Burges. The IDX files are taken from the axel repository.
 - **Tools**: [QEMU](https://www.qemu.org) (GPL-2.0) and its TCG plugin API; GCC; [PyTorch](https://pytorch.org), [OpenBLAS](https://www.openblas.net) and Debian’s riscv64 packages; numpy, pandas, matplotlib.
 - **Pruning philosophy**: the prune + bridge (trap-and-emulate) method follows the CARVE-V proposal (*Core Area Reduction by Verified Elimination*).
+
+## License
+
+The code in this repository is released under the [MIT License](LICENSE). Upstream code keeps its own terms:
+- `CNN/magicalbat/` is MIT-licensed by its author (`CNN/magicalbat/LICENSE`).
+- `CNN/AxelMontlahuc/` is a submodule pointing at the upstream repository and is not covered by this license.
